@@ -1,0 +1,22 @@
+{
+  "name": "taskmarket-market-live",
+  "version": "1.0.0",
+  "description": "A public, static, server-built dashboard of Taskmarket market data.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/verify.mjs",
+    "serve": "npx --yes serve dist"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "playwright-core": "^1.65.1",
+    "subset-font": "^2.9.0"
+  }
+}

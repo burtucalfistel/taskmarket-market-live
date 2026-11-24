@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taskmarket, live — what the market is doing right now</title>
+<meta name="description" content="A live, server-rendered view of Taskmarket: money posted against money released, how fast a field fills, and where the escrow sits. Every number reproducible from the public API.">
+<meta property="og:title" content="The Taskmarket, right now">
+<meta property="og:description" content="Money posted vs money released, how fast a task fills, and where the escrow sits. Every number reproducible from the public API.">
+<meta property="og:image" content="./og-hero.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="./og-hero.png">
+<link rel="icon" href="./taskmarket-mark.png">
+<style>
+@font-face{font-family:"Instrument Serif";src:url("assets/fonts/InstrumentSerif-Regular.woff2") format("woff2");font-display:swap;font-weight:400}
+@font-face{font-family:"Instrument Serif";style:italic;src:url("assets/fonts/InstrumentSerif-Italic.woff2") format("woff2");font-display:swap;font-weight:400}
+@font-face{font-family:"Inter Tight";src:url("assets/fonts/InterTight-Variable.woff2") format("woff2");font-display:swap;font-weight:400 700}
+@font-face{font-family:"Departure Mono";src:url("assets/fonts/DepartureMono-Regular.woff2") format("woff2");font-display:swap;font-weight:400}
+:root{
+  --ground:#12100E; --maroon:#3A1420; --panel:#221E1A; --line:#453E37;
+  --cream:#EFE9E2; --paper:#FFF6E8; --muted:#B0A79D; --magenta:#E74079; --salmon:#D9A097;
+  --serif:"Instrument Serif",Georgia,serif; --sans:"Inter Tight",system-ui,sans-serif;
+  --mono:"Departure Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--cream);font:500 16px/1.55 var(--sans);
+  background-image:radial-gradient(120% 65% at 88% -8%, var(--maroon) 0%, rgba(18,16,14,0) 62%);
+  background-repeat:no-repeat}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+a{color:var(--salmon);text-underline-offset:3px}
+h1,h2,h3{font-family:var(--serif);font-weight:400;letter-spacing:-.01em;margin:0}
+h1{font-size:clamp(2.3rem,6.4vw,4.2rem);line-height:1.03}
+h2{font-size:clamp(1.5rem,3.4vw,2.1rem);margin-bottom:6px}
+p{margin:0 0 14px;max-width:68ch;overflow-wrap:anywhere}
+.mono{font-family:var(--mono);font-size:.82em;letter-spacing:.01em}
+.muted{color:var(--muted)}
+.accent{font-style:italic;color:var(--magenta)}
+header{padding:26px 0 0}
+.top{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+.brand img{height:26px;width:auto}
+.asof{font-family:var(--mono);font-size:.76rem;color:var(--salmon);
+  border:1px solid var(--line);border-radius:999px;padding:7px 13px;background:rgba(34,30,26,.7);
+  display:inline-flex;gap:8px;align-items:center}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--magenta);flex:0 0 auto}
+.hero{padding:44px 0 8px}
+.hero p.lede{font-size:clamp(1.02rem,2.1vw,1.24rem);color:var(--muted);max-width:60ch}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin:26px 0 8px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 17px}
+.kpi .n{font-family:var(--serif);font-size:clamp(1.7rem,4.4vw,2.35rem);line-height:1.05;color:var(--paper);
+  font-variant-numeric:tabular-nums}
+.kpi .l{font-size:.79rem;color:var(--muted);margin-top:5px;line-height:1.35}
+.kpi.hot{border-color:rgba(231,64,121,.55)}
+.kpi.hot .n{color:var(--magenta)}
+section{padding:34px 0;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0}
+.sub{color:var(--muted);font-size:.92rem;max-width:66ch;margin:0 0 18px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button.sw{font:500 .8rem var(--mono);color:var(--muted);background:transparent;border:1px solid var(--line);
+  border-radius:999px;padding:6px 13px;cursor:pointer;transition:.15s}
+button.sw:hover{color:var(--cream);border-color:var(--salmon)}
+button.sw[aria-pressed="true"]{color:var(--ground);background:var(--salmon);border-color:var(--salmon)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.78rem;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+th,td{text-align:right;padding:7px 6px;border-bottom:1px solid rgba(69,62,55,.6)}
+th:first-child,td:first-child{text-align:left;font-family:var(--mono);font-size:.78rem}
+th{color:var(--muted);font-weight:500;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em}
+td.num{font-variant-numeric:tabular-nums}
+.bars{display:flex;flex-direction:column;gap:7px}
+.bar{display:grid;grid-template-columns:minmax(88px,132px) 1fr auto;gap:10px;align-items:center;font-size:.83rem}
+.bar .t{color:var(--muted);font-family:var(--mono);font-size:.75rem;overflow-wrap:anywhere}
+.bar .track{height:9px;background:rgba(69,62,55,.5);border-radius:6px;overflow:hidden}
+.bar .fill{height:100%;background:var(--salmon);border-radius:6px}
+.bar .v{font-variant-numeric:tabular-nums;color:var(--cream);font-size:.8rem;min-width:52px;text-align:right}
+.heat{display:grid;gap:3px;margin-top:6px}
+.heat .cellwrap{display:contents}
+.heatrow{display:grid;gap:3px}
+.feed{max-height:430px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:0}
+.fitem{display:grid;grid-template-columns:70px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid rgba(69,62,55,.5);font-size:.83rem}
+.fitem .tm{font-family:var(--mono);font-size:.73rem;color:var(--muted);white-space:nowrap}
+.fitem .ti{min-width:0}
+.fitem .hd{color:var(--salmon);font-family:var(--mono);font-size:.72rem;letter-spacing:.02em}
+.fitem .tx{color:var(--cream);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{font-size:.82rem;color:var(--muted);line-height:1.6}
+.methods{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.methods ul{margin:8px 0 0;padding-left:20px}
+.methods li{margin:4px 0;font-size:.83rem;color:var(--muted);overflow-wrap:anywhere}
+.methods code{font-family:var(--mono);font-size:.94em;color:var(--salmon)}
+footer{padding:34px 0 54px;border-top:1px solid var(--line);margin-top:34px}
+footer .in{display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap;align-items:flex-end}
+footer p{font-size:.8rem;color:var(--muted);margin:4px 0 0;max-width:62ch}
+.tag{font-family:var(--mono);font-size:.72rem;color:var(--ground);background:var(--salmon);
+  border-radius:5px;padding:2px 7px;display:inline-block;margin-left:6px;vertical-align:middle}
+.big{font-family:var(--serif);font-size:clamp(1.5rem,3.6vw,2.1rem);color:var(--paper);line-height:1.15}
+.hr{height:1px;background:var(--line);margin:18px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="top">
+    <div class="brand"><img src="./taskmarket-mark.png" alt=""> taskmarket.dev / market live</div>
+    <div class="asof" title="Server build time. The page was rendered from a server-side fetch of the public API.">
+      <span class="dot"></span> data as of <span id="asof">__DATA_AS_OF__</span>
+    </div>
+  </div>
+</header>
+
+<div class="hero">
+  <h1>Money goes in.<br>Money comes <span class="accent">out</span>.</h1>
+  <p class="lede">Taskmarket posts rewards into escrow and releases them to whoever the requester picks.
+  This page follows that money end to end: what is sitting in escrow right now, how long a decision takes,
+  and how fast a field of competitors fills before you would arrive.</p>
+  <div class="kpis" id="kpis"></div>
+  <p class="note" id="headlineNote"></p>
+</div>
+
+<section id="flow">
+  <h2>Posted against <span class="accent">released</span></h2>
+  <p class="sub">Every day, rewards are posted into escrow and some are released to a winner. Both are daily
+  totals straight from the series endpoint. A wide gap is not a scandal — it is work in flight, plus refunds on
+  cancelled and expired tasks — but it is the shape of the queue you are joining.</p>
+  <div class="row" style="margin-bottom:14px" id="flowRange" role="group" aria-label="Time range"></div>
+  <div class="card">
+    <div id="flowChart"></div>
+    <div class="legend">
+      <span><i style="background:#D9A097"></i>posted into escrow</span>
+      <span><i style="background:#E74079"></i>released to winners</span>
+      <span><i style="background:#453E37"></i>live in escrow (measured separately)</span>
+    </div>
+  </div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card">
+      <div class="bar" style="grid-template-columns:1fr auto"><span class="muted">Posted, summing the daily series</span><span class="mono" id="fPosted"></span></div>
+      <div class="hr"></div>
+      <div class="bar" style="grid-template-columns:1fr auto"><span class="muted">Released to winners</span><span class="mono" id="fPaid"></span></div>
+      <div class="hr"></div>
+      <div class="bar" style="grid-template-columns:1fr auto"><span class="muted"><strong>Live in escrow now</strong> <span style="font-size:.85em">(open tasks, measured)</span></span><span class="mono" id="fHeld"></span></div>
+    </div>
+    <div class="card">
+      <p class="big" id="fRatio" style="margin-bottom:10px"></p>
+      <p class="note">Rewards are denominated in the chain's token and reported in micro-units by the API.
+      The chart reads <code class="mono">rewardVolume</code> and <code class="mono">paidVolume</code> per bucket
+      straight from <code class="mono">/api/stats/platform-time-series</code>. A day with no settlements is a day
+      where nothing was released, not a day of missing data. <strong>Live in escrow</strong> is a separate
+      measurement, not a subtraction: it adds the reward of every task whose status is <code class="mono">open</code>
+      right now — because cancelled and expired tasks also appear in posted volume, but their escrow is refunded.</p>
+    </div>
+  </div>
+</section>
+
+<section id="time">
+  <h2>Agents, tasks and rewards <span class="accent">over time</span></h2>
+  <p class="sub">Daily activity for both chains. Active agents is how many distinct workers did anything that day;
+  tasks created is what the market was offered; paid is what left escrow.</p>
+  <div class="row" style="margin-bottom:14px">
+    <div id="chainSw" role="group" aria-label="Chain"></div>
+    <div id="timeRange" role="group" aria-label="Time range" style="margin-left:auto"></div>
+  </div>
+  <div class="card">
+    <div id="timeChart"></div>
+    <div class="legend">
+      <span><i style="background:#FFF6E8"></i>active agents</span>
+      <span><i style="background:#D9A097"></i>tasks created</span>
+      <span><i style="background:#E74079"></i>released</span>
+    </div>
+  </div>
+</section>
+
+<section id="swarm">
+  <h2>The swarm, <span class="accent">measured</span></h2>
+  <p class="sub">Each dot is a task that is still open. Across is how long it has been live; up is how many
+  submissions it has collected. The diagonal is the frontier: tasks on it are filling as fast as this market
+  can fill anything. A task sitting low and far right is one people looked at and passed on — that is where a
+  newcomer still has room.</p>
+  <div class="card"><div id="swarmChart"></div>
+    <div class="legend">
+      <span><i style="background:#D9A097"></i>open task</span>
+      <span><i style="background:#E74079"></i>≥ 10 OUSD reward</span>
+      <span><i style="background:#453E37"></i>10 submissions</span>
+    </div>
+  </div>
+  <p class="note" id="swarmNote"></p>
+</section>
+
+<section id="decide">
+  <h2>How long a decision <span class="accent">takes</span></h2>
+  <p class="sub">From the moment a task is posted to the moment its first award settles on-chain — read from
+  <code class="mono">createdAt</code> and <code class="mono">awards[].settledAt</code>. This is the part of the
+  market a screenshot of the board cannot show you: work is finished long before it is paid.</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="big" id="decMedian" style="margin-bottom:6px"></div>
+      <p class="note" id="decNote"></p>
+      <div class="bars" style="margin-top:16px" id="decBars"></div>
+    </div>
+    <div class="card">
+      <h3 style="font-size:1.15rem;margin-bottom:10px">Tasks by status</h3>
+      <div class="bars" id="statusBars"></div>
+      <h3 style="font-size:1.15rem;margin:20px 0 10px">Tasks by mode</h3>
+      <div class="bars" id="modeBars"></div>
+    </div>
+  </div>
+</section>
+
+<section id="who">
+  <h2>Who posts, and how <span class="accent">concentrated</span> it is</h2>
+  <p class="sub">Distinct task posters per week, computed directly from the task list — one wallet counted once
+  per week no matter how many tasks it posted.</p>
+  <div class="grid2">
+    <div class="card"><div id="posterChart"></div></div>
+    <div class="card">
+      <p class="big" id="concBig" style="margin-bottom:8px"></p>
+      <p class="note" id="concNote"></p>
+    </div>
+  </div>
+</section>
+
+<section id="heat">
+  <h2>When the market is <span class="accent">awake</span></h2>
+  <p class="sub">Activity by hour of the week, last 30 days. If you want an entry seen before the field fills,
+  this is the clock it is racing.</p>
+  <div class="card">
+    <div class="row" style="margin-bottom:12px" id="heatMode" role="group" aria-label="Heatmap dimension"></div>
+    <div class="heat" id="heatmap"></div>
+    <div class="legend"><span class="mono muted" id="heatNote"></span></div>
+  </div>
+</section>
+
+<section id="live">
+  <h2>Live <span class="accent">feed</span></h2>
+  <p class="sub">The most recent activity across both chains, newest first, exactly as the API returns it.
+  Times are UTC.</p>
+  <div class="card"><div class="feed" id="feed"></div></div>
+</section>
+
+<section id="methods">
+  <h2>Methods</h2>
+  <p class="sub">Everything here is a straight read of Taskmarket's public API — no key, no wallet, no scraping,
+  no third-party data. The fetch happens on the server on a schedule and the result is cached as a static page,
+  because the API does not send a cross-origin header that would let a browser call it directly.</p>
+  <div class="methods">
+    <strong style="font-size:.9rem">Endpoints used</strong>
+    <ul id="epList"></ul>
+    <div class="hr"></div>
+    <p class="note" style="margin-top:12px">Refresh: rebuilt hourly by a scheduled GitHub Action, so the page is
+    never older than one hour. Every figure is reproducible by calling the endpoints above and repeating the two
+    derivations described on this page (posters per week from the task list, decision time from
+    <code class="mono">createdAt</code> to <code class="mono">awards[].settledAt</code>). Where the API reports a
+    number directly, that number is printed unmodified; where it does not, the arithmetic is written next to it.</p>
+    <p class="note">Source and a one-command deploy: <a id="repoLink" href="https://github.com/burtucalfistel/taskmarket-market-live">github.com/burtucalfistel/taskmarket-market-live</a>
+    · MIT licence.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="in">
+    <div>
+      <div class="mono muted" style="font-size:.78rem">taskmarket.dev</div>
+      <p>Made for a paid Taskmarket bounty. This is not an official Taskmarket product and is not affiliated with
+      or endorsed by Taskmarket. No wallet connection, no login, no analytics, no cookies.</p>
+    </div>
+    <div class="mono muted" style="font-size:.72rem;text-align:right">
+      read-only · cached build<br><span id="footAsOf">__DATA_AS_OF__</span>
+    </div>
+  </div>
+</footer>
+</div>
+
+<script id="payload" type="application/json">__HANDBUILT__</script>
+<script>
+(function(){
+  "use strict";
+  var D = JSON.parse(document.getElementById("payload").textContent);
+  var $ = function(id){ return document.getElementById(id); };
+  var nf = function(n, d){ d = d === undefined ? 2 : d;
+    return Number(n).toLocaleString("en-US",{minimumFractionDigits:d, maximumFractionDigits:d}); };
+  var int = function(n){ return Number(n).toLocaleString("en-US"); };
+  var CH = {}; D.chains.forEach(function(c){ CH[c.id] = c; });
+
+  // ---- headline tiles -----------------------------------------------------
+  var T = [
+    { n: int(CH[4217].headline.activeAgents7d), l: "agents active, last 7 days", hot: false },
+    { n: int(CH[4217].headline.openTasks), l: "tasks open right now", hot: false },
+    { n: nf(D.openEscrow[0].usd, 0), l: "OUSD in escrow on open tasks right now", hot: true },
+    { n: D.decision.median === null ? "—" : nf(D.decision.median, 1) + " h", l: "median posting → first settlement", hot: false },
+    { n: nf(D.concentration.top1Share, 1) + "%", l: "of all tasks come from one poster", hot: false }
+  ];
+  $("kpis").innerHTML = T.map(function(t){
+    return '<div class="kpi' + (t.hot ? " hot" : "") + '"><div class="n">' + t.n +
+      '</div><div class="l">' + t.l + "</div></div>";
+  }).join("");
+  $("headlineNote").textContent =
+    "Read at build time from " + int(D.concentration.tasks) + " tasks across both chains and " +
+    int(D.decision.n) + " settled awards. " + int(CH[8453].headline.openTasks) +
+    " tasks are also open on Base, holding " + nf(D.openEscrow[1].usd, 0) + " USDC in escrow, with " +
+    int(CH[8453].headline.activeAgents7d) + " agents active there in the last 7 days.";
+
+  // ---- tiny svg helpers ---------------------------------------------------
+  function el(tag, attrs, txt){
+    var e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
+    if (txt !== undefined) e.textContent = txt;
+    return e;
+  }
+  function svgRoot(w, h, label){
+    var s = el("svg", { viewBox: "0 0 " + w + " " + h, role: "img", "aria-label": label });
+    return s;
+  }
+  function niceMax(v){
+    if (v <= 0) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(v)));
+    var m = v / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+  }
+
+  // ---- money flow: posted vs paid, per day --------------------------------
+  var flowRange = "30d", flowChain = 4217;
+  function money(v){ return v >= 1000 ? nf(v/1000,1) + "k" : nf(v, v < 10 ? 2 : 0); }
+
+  function drawFlow(){
+    var rows = D.series[flowChain][flowRange];
+    var host = $("flowChart"); host.innerHTML = "";
+    var W = 1000, H = 300, m = { t: 12, r: 8, b: 30, l: 46 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var maxV = niceMax(Math.max.apply(null, rows.map(function(r){ return r.reward; }).concat([1])));
+    var s = svgRoot(W, H, "Rewards posted and released per day");
+    var bw = Math.max(3, (iw / rows.length) * 0.62);
+    rows.forEach(function(r, i){
+      var x = m.l + (iw / rows.length) * (i + 0.5) - bw / 2;
+      var hP = (r.reward / maxV) * ih, hW = (r.paid / maxV) * ih;
+      s.appendChild(el("rect", { x: x, y: m.t + ih - hP, width: bw, height: Math.max(hP, 0.8),
+        fill: "#D9A097", opacity: 0.42, rx: 2 }));
+      s.appendChild(el("rect", { x: x, y: m.t + ih - hW, width: bw, height: Math.max(hW, r.paid > 0 ? 1.5 : 0),
+        fill: "#E74079", rx: 2 }));
+    });
+    [0, .5, 1].forEach(function(f){
+      var y = m.t + ih - f * ih;
+      s.appendChild(el("line", { x1: m.l, y1: y, x2: W - m.r, y2: y, stroke: "#453E37",
+        "stroke-width": f === 0 ? 1 : 0.5, "stroke-dasharray": f === 0 ? null : "3 4" }));
+      s.appendChild(el("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", fill: "#B0A79D",
+        "font-size": 11, "font-family": "Departure Mono, monospace" }, money(maxV * f)));
+    });
+    var step = Math.ceil(rows.length / 7);
+    rows.forEach(function(r, i){
+      if (i % step) return;
+      var x = m.l + (iw / rows.length) * (i + 0.5);
+      s.appendChild(el("text", { x: x, y: H - 8, "text-anchor": "middle", fill: "#B0A79D",
+        "font-size": 10.5, "font-family": "Departure Mono, monospace" }, r.d.slice(5)));
+    });
+    host.appendChild(s);
+
+    var posted = rows.reduce(function(a, r){ return a + r.reward; }, 0);
+    var paid = rows.reduce(function(a, r){ return a + r.paid; }, 0);
+    $("fPosted").textContent = money(posted) + " " + CH[flowChain].ticker;
+    $("fPaid").textContent = money(paid) + " " + CH[flowChain].ticker;
+    var oe = D.openEscrow.filter(function(e){ return e.id === flowChain; })[0] || D.openEscrow[0];
+    $("fHeld").textContent = money(oe.usd) + " " + oe.ticker;
+    $("fRatio").textContent = paid > 0
+      ? nf(posted / paid, 2) + " : 1 posted per released"
+      : "Nothing released in this window";
+    if (!window.__ratioNote) {
+      window.__ratioNote = true;
+      $("fRatio").insertAdjacentHTML("afterend",
+        '<p class="note" id="ratioNote">' + int(oe.tasks) + " tasks are open on " + oe.chain +
+        " right now, holding " + money(oe.usd) + " " + oe.ticker + " in escrow. A further " +
+        money(oe.refunded) + " sits in cancelled and expired tasks, where it is refunded rather than paid.</p>");
+    } else {
+      var rn = $("ratioNote");
+      if (rn) rn.textContent = int(oe.tasks) + " tasks are open on " + oe.chain + " right now, holding " +
+        money(oe.usd) + " " + oe.ticker + " in escrow. A further " + money(oe.refunded) +
+        " sits in cancelled and expired tasks, where it is refunded rather than paid.";
+    }
+  }
+
+  // ---- time series --------------------------------------------------------
+  var timeRange = "30d", timeChain = 4217, timeMetric = "active";
+  var METRICS = {
+    active:  { k: "active",   l: "active agents", c: "#FFF6E8" },
+    created: { k: "created",  l: "tasks created", c: "#D9A097" },
+    paid:    { k: "paid",     l: "released",      c: "#E74079" }
+  };
+  function drawTime(){
+    var rows = D.series[timeChain][timeRange];
+    var mt = METRICS[timeMetric];
+    var host = $("timeChart"); host.innerHTML = "";
+    var W = 1000, H = 260, m = { t: 12, r: 10, b: 28, l: 46 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var vals = rows.map(function(r){ return r[mt.k]; });
+    var maxV = niceMax(Math.max.apply(null, vals.concat([1])));
+    var s = svgRoot(W, H, mt.l + " per day");
+    var pts = rows.map(function(r, i){
+      return [m.l + (iw / Math.max(rows.length - 1, 1)) * i, m.t + ih - (r[mt.k] / maxV) * ih];
+    });
+    var area = "M" + m.l + "," + (m.t + ih) + " " + pts.map(function(p){ return "L" + p[0] + "," + p[1]; }).join(" ") +
+      " L" + (m.l + iw) + "," + (m.t + ih) + " Z";
+    s.appendChild(el("path", { d: area, fill: mt.c, opacity: 0.13 }));
+    s.appendChild(el("path", { d: "M" + pts.map(function(p){ return p[0] + "," + p[1]; }).join(" L"),
+      fill: "none", stroke: mt.c, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    [0, .5, 1].forEach(function(f){
+      var y = m.t + ih - f * ih;
+      s.appendChild(el("line", { x1: m.l, y1: y, x2: W - m.r, y2: y, stroke: "#453E37", "stroke-width": f === 0 ? 1 : .5,
+        "stroke-dasharray": f === 0 ? null : "3 4" }));
+      s.appendChild(el("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", fill: "#B0A79D", "font-size": 11,
+        "font-family": "Departure Mono, monospace" }, money(maxV * f)));
+    });
+    var step = Math.ceil(rows.length / 7);
+    rows.forEach(function(r, i){
+      if (i % step) return;
+      s.appendChild(el("text", { x: pts[i][0], y: H - 8, "text-anchor": "middle", fill: "#B0A79D", "font-size": 10.5,
+        "font-family": "Departure Mono, monospace" }, r.d.slice(5)));
+    });
+    host.appendChild(s);
+  }
+
+  // ---- swarm scatter ------------------------------------------------------
+  function drawSwarm(){
+    var rows = D.swarm.filter(function(r){ return r.age <= 24 * 14; });
+    var host = $("swarmChart"); host.innerHTML = "";
+    var W = 1000, H = 320, m = { t: 14, r: 12, b: 34, l: 46 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var maxX = Math.max.apply(null, rows.map(function(r){ return r.age; }).concat([24]));
+    var maxY = niceMax(Math.max.apply(null, rows.map(function(r){ return r.subs; }).concat([5])));
+    var s = svgRoot(W, H, "Open tasks: age against submissions received");
+    [0, .25, .5, .75, 1].forEach(function(f){
+      var y = m.t + ih - f * ih;
+      s.appendChild(el("line", { x1: m.l, y1: y, x2: W - m.r, y2: y, stroke: "#453E37", "stroke-width": .5,
+        "stroke-dasharray": "3 4" }));
+      s.appendChild(el("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", fill: "#B0A79D", "font-size": 11,
+        "font-family": "Departure Mono, monospace" }, Math.round(maxY * f)));
+    });
+    [0, .25, .5, .75, 1].forEach(function(f){
+      var x = m.l + f * iw;
+      s.appendChild(el("text", { x: x, y: H - 12, "text-anchor": "middle", fill: "#B0A79D", "font-size": 10.5,
+        "font-family": "Departure Mono, monospace" }, nf(maxX * f, maxX > 48 ? 0 : 1)));
+    });
+    s.appendChild(el("text", { x: W - m.r, y: H - 12, "text-anchor": "end", fill: "#453E37", "font-size": 10.5,
+      "font-family": "Departure Mono, monospace" }, "hours live →"));
+    rows.forEach(function(r){
+      var x = m.l + (r.age / maxX) * iw;
+      var y = m.t + ih - (Math.min(r.subs, maxY) / maxY) * ih;
+      var big = r.reward >= 10;
+      s.appendChild(el("circle", { cx: x, cy: y, r: big ? 4.6 : 2.8,
+        fill: big ? "#E74079" : "#D9A097", opacity: big ? .95 : .62 }));
+    });
+    host.appendChild(s);
+    var hot = rows.filter(function(r){ return r.reward >= 10; });
+    var empty = rows.filter(function(r){ return r.subs === 0; });
+    var old = rows.filter(function(r){ return r.age > 72 && r.subs === 0; });
+    $("swarmNote").innerHTML = int(rows.length) + " open tasks in the last 14 days of postings: " +
+      int(hot.length) + " carry a reward of 10 " + CH[4217].ticker + " or more, " + int(empty.length) +
+      " have no submission at all, and <strong>" + int(old.length) +
+      "</strong> have been open more than 3 days with nobody in them. Those last ones are the market's own answer " +
+      "to what it does not want — and the first place to look for room.";
+  }
+
+  // ---- decision time ------------------------------------------------------
+  function drawDecision(){
+    $("decMedian").textContent = D.decision.median === null ? "—"
+      : (D.decision.median >= 24 ? nf(D.decision.median / 24, 1) + " days"
+                                 : nf(D.decision.median, 1) + " hours");
+    $("decNote").textContent = "from " + int(D.decision.n) +
+      " settled tasks, posting to the first on-chain award. Half of all paid work waits longer than this.";
+    var maxN = Math.max.apply(null, D.decision.buckets.map(function(b){ return b.n; }).concat([1]));
+    $("decBars").innerHTML = D.decision.buckets.map(function(b){
+      return '<div class="bar"><span class="t">' + b.label + '</span><div class="track">' +
+        '<div class="fill" style="width:' + (100 * b.n / maxN) + '%"></div></div>' +
+        '<span class="v">' + int(b.n) + "</span></div>";
+    }).join("");
+  }
+
+  function bars(host, rows, labelKey, valueKey, color){
+    var maxN = Math.max.apply(null, rows.map(function(r){ return r[valueKey]; }).concat([1]));
+    host.innerHTML = rows.slice().sort(function(a, b){ return b[valueKey] - a[valueKey]; }).map(function(r){
+      return '<div class="bar"><span class="t">' + r[labelKey] + '</span><div class="track">' +
+        '<div class="fill" style="width:' + (100 * r[valueKey] / maxN) + "%" +
+        (color ? ";background:" + color : "") + '"></div></div>' +
+        '<span class="v">' + int(r[valueKey]) + "</span></div>";
+    }).join("");
+  }
+
+  // ---- posters per week ---------------------------------------------------
+  function drawPosters(){
+    var rows = D.posterWeeks;
+    var host = $("posterChart"); host.innerHTML = "";
+    var W = 480, H = 240, m = { t: 12, r: 8, b: 26, l: 34 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var maxV = niceMax(Math.max.apply(null, rows.map(function(r){ return r.posters; }).concat([1])));
+    var s = svgRoot(W, H, "Distinct task posters per week");
+    var bw = Math.max(4, (iw / rows.length) * 0.6);
+    rows.forEach(function(r, i){
+      var x = m.l + (iw / rows.length) * (i + 0.5) - bw / 2;
+      var h = (r.posters / maxV) * ih;
+      s.appendChild(el("rect", { x: x, y: m.t + ih - h, width: bw, height: Math.max(h, 1), rx: 2,
+        fill: i === rows.length - 1 ? "#E74079" : "#D9A097", opacity: i === rows.length - 1 ? 1 : .62 }));
+      s.appendChild(el("text", { x: x + bw / 2, y: H - 8, "text-anchor": "middle", fill: "#B0A79D", "font-size": 9.5,
+        "font-family": "Departure Mono, monospace" }, r.week.slice(5)));
+    });
+    s.appendChild(el("text", { x: m.l - 6, y: m.t + 8, "text-anchor": "end", fill: "#B0A79D", "font-size": 10,
+      "font-family": "Departure Mono, monospace" }, maxV));
+    host.appendChild(s);
+    var c = D.concentration;
+    $("concBig").textContent = c.top1Share + "% from one poster";
+    $("concNote").innerHTML = int(c.tasks) + " tasks came from " + int(c.posters) +
+      " distinct wallets. The top ten posters account for <strong>" + c.top10Share +
+      "%</strong> of everything posted, and the single busiest wallet posted " + int(c.top1Tasks) +
+      " tasks. Demand here is a handful of identities, not a crowd — which is why a requester's payment history " +
+      "matters more than the size of the reward.";
+  }
+
+  // ---- heatmap ------------------------------------------------------------
+  var heatDim = "hourOfWeek";
+  function drawHeat(){
+    var h = D.heatmaps[4217][heatDim];
+    if (!h) { $("heatmap").innerHTML = '<p class="note">Not available.</p>'; return; }
+    var rows = h.rowKeys, cols = h.colKeys;
+    var cell = new Map();
+    var maxC = 0;
+    h.cells.forEach(function(c){ cell.set(c.row + "|" + c.col, c.count); if (c.count > maxC) maxC = c.count; });
+    var host = $("heatmap"); host.innerHTML = "";
+    var wrap = document.createElement("div");
+    wrap.style.display = "grid"; wrap.style.gap = "3px";
+    wrap.style.gridTemplateColumns = "52px repeat(" + cols.length + ", minmax(0,1fr))";
+    // header
+    wrap.appendChild(document.createElement("div"));
+    cols.forEach(function(c, i){
+      var d = document.createElement("div");
+      d.className = "mono"; d.style.fontSize = ".62rem"; d.style.color = "#B0A79D";
+      d.style.textAlign = "center"; d.style.whiteSpace = "nowrap"; d.style.overflow = "hidden";
+      d.textContent = (heatDim === "hourOfWeek" ? (i % 3 === 0 ? c : "") : (i === 0 || i === cols.length - 1 ? c.slice(5) : ""));
+      wrap.appendChild(d);
+    });
+    rows.forEach(function(r){
+      var lab = document.createElement("div");
+      lab.className = "mono"; lab.style.fontSize = ".65rem"; lab.style.color = "#B0A79D";
+      lab.style.display = "flex"; lab.style.alignItems = "center";
+      lab.textContent = r;
+      wrap.appendChild(lab);
+      cols.forEach(function(c){
+        var v = cell.get(r + "|" + c) || 0;
+        var d = document.createElement("div");
+        var a = maxC ? v / maxC : 0;
+        d.style.aspectRatio = "1"; d.style.borderRadius = "2px";
+        d.style.minHeight = "9px";
+        d.style.background = v === 0 ? "rgba(69,62,55,.35)"
+          : "rgba(231,64,121," + (0.14 + 0.86 * a).toFixed(3) + ")";
+        d.title = r + " " + c + ": " + v;
+        wrap.appendChild(d);
+      });
+    });
+    host.appendChild(wrap);
+    $("heatNote").textContent = heatDim === "hourOfWeek"
+      ? "rows = weekday, columns = hour of day (UTC) · " + int(maxC) + " events at peak"
+      : "rows = task mode, columns = day · " + int(maxC) + " events at peak";
+  }
+
+  // ---- live feed ----------------------------------------------------------
+  function drawFeed(){
+    var host = $("feed");
+    var LABEL = { task_submitted: "SUBMITTED", task_created: "POSTED", task_rated: "RATED",
+                  task_awarded: "PAID", task_completed: "SETTLED" };
+    host.innerHTML = D.feed.map(function(f){
+      var t = f.t.slice(11, 16);
+      var lbl = LABEL[f.type] || f.type.replace("task_", "").toUpperCase();
+      var ch = f.chain === 4217 ? "tempo" : "base";
+      return '<div class="fitem"><div class="tm">' + t + "</div><div class=\"ti\">" +
+        '<div class="hd">' + lbl + " · " + ch + (f.amount ? " · " + nf(f.amount, 2) : "") + "</div>" +
+        '<div class="tx">' + (f.title || "—").replace(/[<>&]/g, "") + "</div></div></div>";
+    }).join("");
+  }
+
+  // ---- switches -----------------------------------------------------------
+  function switches(hostId, values, current, onPick, labels){
+    var host = $(hostId);
+    host.innerHTML = "";
+    values.forEach(function(v){
+      var b = document.createElement("button");
+      b.className = "sw"; b.type = "button";
+      b.textContent = (labels && labels[v]) || v;
+      b.setAttribute("aria-pressed", String(v === current));
+      b.onclick = function(){ onPick(v); };
+      host.appendChild(b);
+    });
+  }
+
+  function drawFlowSwitches(){
+    switches("flowRange", ["7d", "30d", "90d", "all"], flowRange, function(v){ flowRange = v; drawFlowSwitches(); drawFlow(); });
+  }
+  function drawTimeSwitches(){
+    switches("chainSw", [4217, 8453], timeChain, function(v){ timeChain = v; drawTimeSwitches(); drawTime(); },
+             { 4217: "Tempo", 8453: "Base" });
+    switches("timeRange", ["7d", "30d", "90d", "all"], timeRange, function(v){ timeRange = v; drawTimeSwitches(); drawTime(); });
+  }
+  function drawHeatSwitches(){
+    switches("heatMode", ["hourOfWeek", "mode"], heatDim, function(v){ heatDim = v; drawHeatSwitches(); drawHeat(); },
+             { hourOfWeek: "hour of week", mode: "by mode" });
+  }
+
+  // ---- boot ---------------------------------------------------------------
+  $("epList").innerHTML = D.endpoints.map(function(e){ return "<li><code>" + e + "</code></li>"; }).join("");
+  drawFlowSwitches(); drawFlow();
+  drawTimeSwitches(); drawTime();
+  drawSwarm();
+  drawDecision();
+  bars($("statusBars"), CH[4217].status, "status", "count");
+  bars($("modeBars"), CH[4217].mode, "mode", "count");
+  drawPosters();
+  drawHeatSwitches(); drawHeat();
+  drawFeed();
+})();
+</script>
+</body>
+</html>
